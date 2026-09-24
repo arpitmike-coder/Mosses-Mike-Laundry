@@ -105,9 +105,9 @@ def webhook():
                     User's message: "{msg_body}"
                     """
                     
-                    # नई लाइब्रेरी से कंटेंट जनरेट करें
+                   # नई लाइब्रेरी से कंटेंट जनरेट करें
                     response = client.models.generate_content(
-                        model='gemini-1.5-flash',
+                        model='gemini-2.0-flash',
                         contents=prompt,
                         config=types.GenerateContentConfig(
                             system_instruction=system_instruction,
