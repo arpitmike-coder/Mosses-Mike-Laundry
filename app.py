@@ -5,7 +5,7 @@ import requests
 app = Flask(__name__)
 
 # ================= CONFIGURATIONS =================
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN", "")
 PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID", "")
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "mosses191218")
@@ -36,7 +36,7 @@ How can I help you today?
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Moses Mike Laundry Bot with Groq is Live!"
+    return "Moses Mike Laundry Bot with ChatGPT is Live!"
 
 # ================= WEBHOOK =================
 @app.route("/webhook", methods=["GET", "POST"])
@@ -85,7 +85,7 @@ def webhook():
                         print(f"Error fetching pricing: {e}")
                         reply_text = "Sorry, unable to fetch rates right now."
                 
-                # FAQ & Groq AI check
+                # FAQ & OpenAI ChatGPT check
                 else:
                     faq_data = "No FAQ data available."
                     try:
@@ -93,13 +93,14 @@ def webhook():
                     except Exception as e:
                         print(f"Error fetching FAQ: {e}")
 
+                    # OpenAI API Request Setup
                     headers = {
-                        "Authorization": f"Bearer {GROQ_API_KEY}",
+                        "Authorization": f"Bearer {OPENAI_API_KEY}",
                         "Content-Type": "application/json"
                     }
                     
                     payload = {
-                        "model": "llama-3.1-8b-instant",  # <--- यह मॉडल 100% काम करता है
+                        "model": "gpt-4o-mini",
                         "messages": [
                             {"role": "system", "content": system_instruction},
                             {"role": "user", "content": f"Here is the official FAQ list and database from our store:\n{faq_data}\n\nUser's message: '{msg_body}'"}
@@ -108,16 +109,16 @@ def webhook():
                     }
 
                     try:
-                        groq_res = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers)
-                        res_json = groq_res.json()
+                        openai_res = requests.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)
+                        res_json = openai_res.json()
                         
                         if "choices" in res_json:
                             reply_text = res_json["choices"][0]["message"]["content"]
                         else:
-                            print("Groq Error Response:", res_json)
+                            print("OpenAI Error Response:", res_json)
                             reply_text = f"Technical Error: {res_json.get('error', {}).get('message', 'Unknown error')}"
                     except Exception as ai_err:
-                        print(f"Groq Request Exception: {ai_err}")
+                        print(f"OpenAI Request Exception: {ai_err}")
                         reply_text = f"Technical Error: {str(ai_err)}"
 
                 # Send response to customer
