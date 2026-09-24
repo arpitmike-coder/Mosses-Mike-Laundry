@@ -99,7 +99,7 @@ def webhook():
                     }
                     
                     payload = {
-                        "model": "llama-3.3-70b-versatile",
+                        "model": "llama-3.1-8b-instant",  # <--- यह मॉडल 100% काम करता है
                         "messages": [
                             {"role": "system", "content": system_instruction},
                             {"role": "user", "content": f"Here is the official FAQ list and database from our store:\n{faq_data}\n\nUser's message: '{msg_body}'"}
