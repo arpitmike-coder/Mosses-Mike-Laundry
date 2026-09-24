@@ -3,7 +3,6 @@ from flask import Flask, request, jsonify
 import requests
 from google import genai
 from google.genai import types
-import time
 
 app = Flask(__name__)
 
@@ -91,7 +90,7 @@ def webhook():
                         print(f"Error fetching pricing: {e}")
                         reply_text = "Sorry, unable to fetch rates right now."
                 
-                # FAQ & Gemini AI check with retry mechanism
+                # FAQ & Gemini AI check with direct error display
                 else:
                     faq_data = "No FAQ data available."
                     try:
@@ -106,27 +105,19 @@ def webhook():
                     User's message: "{msg_body}"
                     """
                     
-                    reply_text = "Maaf kijiye, abhi server par thoda load hai. Kripya dobara message bhejiye."
-                    
-                    for attempt in range(3):
-                        try:
-                            response = client.models.generate_content(
-                                model='gemini-2.0-flash',
-                                contents=prompt,
-                                config=types.GenerateContentConfig(
-                                    system_instruction=system_instruction,
-                                    temperature=0.0
-                                )
+                    try:
+                        response = client.models.generate_content(
+                            model='gemini-2.0-flash',
+                            contents=prompt,
+                            config=types.GenerateContentConfig(
+                                system_instruction=system_instruction,
+                                temperature=0.0
                             )
-                            reply_text = response.text
-                            break
-                        except Exception as ai_err:
-                            print(f"Attempt {attempt+1} failed: {ai_err}")
-                            if "503" in str(ai_err) or "UNAVAILABLE" in str(ai_err):
-                                time.sleep(2)
-                                continue
-                            else:
-                                break
+                        )
+                        reply_text = response.text
+                    except Exception as ai_err:
+                        print(f"Gemini Error: {ai_err}")
+                        reply_text = f"Technical Error: {str(ai_err)}"
 
                 # Send response to customer
                 send_whatsapp_message(phone_number_id, from_mobile, reply_text)
