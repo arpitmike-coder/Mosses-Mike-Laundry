@@ -1,7 +1,7 @@
 import os
 from flask import Flask, request, jsonify
 import requests
-import google.generativeai as genai
+from google import genai
 from google.genai import types
 
 app = Flask(__name__)
@@ -90,7 +90,7 @@ def webhook():
                         print(f"Error fetching pricing: {e}")
                         reply_text = "Sorry, unable to fetch rates right now."
                 
-                # FAQ & Gemini AI check (Using new google-genai library)
+                # FAQ & Gemini AI check
                 else:
                     faq_data = "No FAQ data available."
                     try:
@@ -105,7 +105,7 @@ def webhook():
                     User's message: "{msg_body}"
                     """
                     
-                    # नई लाइब्रेरी से कंटेंट जनरेट करने का तरीका
+                    # नई लाइब्रेरी से कंटेंट जनरेट करें
                     response = client.models.generate_content(
                         model='gemini-1.5-flash',
                         contents=prompt,
