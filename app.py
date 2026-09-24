@@ -1,21 +1,16 @@
 import os
 from flask import Flask, request, jsonify
 import requests
-from google import genai
-from google.genai import types
 
 app = Flask(__name__)
 
 # ================= CONFIGURATIONS =================
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "YAHAN_APNI_GEMINI_API_KEY_DALO")
-WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN", "YAHAN_APNA_WHATSAPP_ACCESS_TOKEN_DALO")
-PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID", "YAHAN_APNI_PHONE_NUMBER_ID_DALO")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN", "")
+PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID", "")
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "mosses191218")
-GOOGLE_WEB_APP_URL = os.environ.get("GOOGLE_WEB_APP_URL", "YAHAN_APNA_GOOGLE_APPS_SCRIPT_WEB_APP_URL_DALO")
+GOOGLE_WEB_APP_URL = os.environ.get("GOOGLE_WEB_APP_URL", "")
 OWNER_PHONE = "917355517322"
-
-# Setup Google GenAI Client
-client = genai.Client(api_key=GEMINI_API_KEY)
 
 system_instruction = """
 You are a strict and professional laundry booking assistant for "Moses Mike Laundry".
@@ -41,7 +36,7 @@ How can I help you today?
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Moses Mike Laundry Bot is Live!"
+    return "Moses Mike Laundry Bot with Groq is Live!"
 
 # ================= WEBHOOK =================
 @app.route("/webhook", methods=["GET", "POST"])
@@ -90,7 +85,7 @@ def webhook():
                         print(f"Error fetching pricing: {e}")
                         reply_text = "Sorry, unable to fetch rates right now."
                 
-                # FAQ & Gemini AI check with direct error display
+                # FAQ & Groq AI check
                 else:
                     faq_data = "No FAQ data available."
                     try:
@@ -98,25 +93,32 @@ def webhook():
                     except Exception as e:
                         print(f"Error fetching FAQ: {e}")
 
-                    prompt = f"""
-                    Here is the official FAQ list and database from our store:
-                    {faq_data}
-
-                    User's message: "{msg_body}"
-                    """
+                    # Groq API Request Setup
+                    headers = {
+                        "Authorization": f"Bearer {GROQ_API_KEY}",
+                        "Content-Type": "application/json"
+                    }
                     
+                    payload = {
+                        "model": "llama-3.3-70b-versatile",
+                        "messages": [
+                            {"role": "system", "content": system_instruction},
+                            {"role": "user", "content": f"Here is the official FAQ list and database from our store:\n{faq_data}\n\nUser's message: '{msg_body}'"}
+                        ],
+                        "temperature": 0.0
+                    }
+
                     try:
-                        response = client.models.generate_content(
-                            model='gemini-2.0-flash',
-                            contents=prompt,
-                            config=types.GenerateContentConfig(
-                                system_instruction=system_instruction,
-                                temperature=0.0
-                            )
-                        )
-                        reply_text = response.text
+                        groq_res = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers)
+                        res_json = groq_res.json()
+                        
+                        if "choices" in res_json:
+                            reply_text = res_json["choices"][0]["message"]["content"]
+                        else:
+                            print("Groq Error Response:", res_json)
+                            reply_text = f"Technical Error: {res_json.get('error', {}).get('message', 'Unknown error')}"
                     except Exception as ai_err:
-                        print(f"Gemini Error: {ai_err}")
+                        print(f"Groq Request Exception: {ai_err}")
                         reply_text = f"Technical Error: {str(ai_err)}"
 
                 # Send response to customer
