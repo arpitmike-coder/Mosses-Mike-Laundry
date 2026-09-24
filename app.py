@@ -1,7 +1,8 @@
 import os
 from flask import Flask, request, jsonify
 import requests
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 app = Flask(__name__)
 
@@ -11,15 +12,10 @@ WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN", "YAHAN_APNA_WHATSAPP_ACCESS_TO
 PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID", "YAHAN_APNI_PHONE_NUMBER_ID_DALO")
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "mosses191218")
 GOOGLE_WEB_APP_URL = os.environ.get("GOOGLE_WEB_APP_URL", "YAHAN_APNA_GOOGLE_APPS_SCRIPT_WEB_APP_URL_DALO")
-OWNER_PHONE = "917355517322"  # आपका पर्सनल नंबर जिस पर नए ऑर्डर का नोटिफिकेशन आएगा
+OWNER_PHONE = "917355517322"
 
-# Gemini API configure karen
-if GEMINI_API_KEY and GEMINI_API_KEY != "YAHAN_APNI_GEMINI_API_KEY_DALO":
-    genai.configure(api_key=GEMINI_API_KEY)
-
-generation_config = {
-    "temperature": 0.0,
-}
+# नई Google GenAI Client को सेट अप करें
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 system_instruction = """
 You are a strict and professional laundry booking assistant for "Moses Mike Laundry".
@@ -43,13 +39,6 @@ How can I help you today?
 3. Match the user's language (Hindi/English/Hinglish). Keep replies short, polite, and strictly to the point.
 """
 
-# Model name ko update kar diya gaya hai taaki 404 error na aaye
-model = genai.GenerativeModel(
-    model_name='gemini-1.5-pro',
-    system_instruction=system_instruction,
-    generation_config=generation_config
-)
-
 @app.route("/", methods=["GET"])
 def home():
     return "Moses Mike Laundry Bot is Live!"
@@ -57,7 +46,6 @@ def home():
 # ================= WEBHOOK (GET for verification & POST for messages) =================
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
-    # 1. Meta (WhatsApp) जब वेबहुक वेरीफाई करेगा (GET Request)
     if request.method == "GET":
         mode = request.args.get("hub.mode")
         token = request.args.get("hub.verify_token")
@@ -73,7 +61,6 @@ def webhook():
                 return "Verification failed: Token mismatch", 403
         return "Webhook endpoint is active", 200
 
-    # 2. जब यूजर WhatsApp पर मैसेज भेजेगा (POST Request)
     elif request.method == "POST":
         data = request.json
         print("Incoming Data:", data)
@@ -103,7 +90,7 @@ def webhook():
                         print(f"Error fetching pricing: {e}")
                         reply_text = "Sorry, unable to fetch rates right now."
                 
-                # FAQ & Gemini AI check
+                # FAQ & Gemini AI check (Using new google-genai library)
                 else:
                     faq_data = "No FAQ data available."
                     try:
@@ -117,13 +104,22 @@ def webhook():
 
                     User's message: "{msg_body}"
                     """
-                    ai_response = model.generate_content(prompt)
-                    reply_text = ai_response.text
+                    
+                    # नई लाइब्रेरी से कंटेंट जनरेट करने का तरीका
+                    response = client.models.generate_content(
+                        model='gemini-1.5-flash',
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_instruction,
+                            temperature=0.0
+                        )
+                    )
+                    reply_text = response.text
 
                 # ग्राहक को WhatsApp पर जवाब भेजें
                 send_whatsapp_message(phone_number_id, from_mobile, reply_text)
 
-                # 💡 यदि AI के रिप्लाई में ऑर्डर कंफर्मेशन / ऑर्डर आईडी जनरेट हो गई है, तो ओनर को भी नोटिफिकेशन भेजें
+                # ऑर्डर कंफर्म होने पर ओनर को नोटिफिकेशन भेजें
                 if "order id" in reply_text.lower() or "confirmed" in reply_text.lower():
                     owner_notification = f"🚨 New Order Alert!\n\nCustomer: {from_mobile}\nDetails/Reply: {reply_text}"
                     send_whatsapp_message(phone_number_id, OWNER_PHONE, owner_notification)
