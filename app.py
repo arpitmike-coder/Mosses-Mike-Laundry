@@ -36,7 +36,7 @@ How can I help you today?
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Moses Mike Laundry Bot with Groq is Live!"
+    return "Moses Mike Laundry Bot with Groq (70b) is Live!"
 
 # ================= WEBHOOK =================
 @app.route("/webhook", methods=["GET", "POST"])
@@ -85,7 +85,7 @@ def webhook():
                         print(f"Error fetching pricing: {e}")
                         reply_text = "Sorry, unable to fetch rates right now."
                 
-                # FAQ & Groq AI check
+                # FAQ & Groq AI check (Using llama-3.3-70b-versatile)
                 else:
                     faq_data = "No FAQ data available."
                     try:
@@ -93,7 +93,6 @@ def webhook():
                     except Exception as e:
                         print(f"Error fetching FAQ: {e}")
 
-                    # Groq API Request Setup
                     headers = {
                         "Authorization": f"Bearer {GROQ_API_KEY}",
                         "Content-Type": "application/json"
