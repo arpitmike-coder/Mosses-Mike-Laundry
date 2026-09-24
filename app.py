@@ -6,18 +6,17 @@ import google.generativeai as genai
 app = Flask(__name__)
 
 # ================= CONFIGURATIONS =================
-# Yahan apni asli API keys ya to direct dalen ya Render ke environment variables se uthayein
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "YAHAN_APNI_GEMINI_API_KEY_DALO")
 WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN", "YAHAN_APNA_WHATSAPP_ACCESS_TOKEN_DALO")
 PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID", "YAHAN_APNI_PHONE_NUMBER_ID_DALO")
-VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "my_secret_token_123")
+VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "mosses191218")
 GOOGLE_WEB_APP_URL = os.environ.get("GOOGLE_WEB_APP_URL", "YAHAN_APNA_GOOGLE_APPS_SCRIPT_WEB_APP_URL_DALO")
-OWNER_PHONE = "917355517322"
+OWNER_PHONE = "917355517322"  # आपका पर्सनल नंबर जिस पर नए ऑर्डर का नोटिफिकेशन आएगा
 
 # Gemini API configure karen
-genai.configure(api_key=GEMINI_API_KEY)
+if GEMINI_API_KEY and GEMINI_API_KEY != "YAHAN_APNI_GEMINI_API_KEY_DALO":
+    genai.configure(api_key=GEMINI_API_KEY)
 
-# Temperature 0.0 taaki AI apni taraf se internet ki koi extra baat na soche (Strict Boundary Rule)
 generation_config = {
     "temperature": 0.0,
 }
@@ -54,78 +53,89 @@ model = genai.GenerativeModel(
 def home():
     return "Moses Mike Laundry Bot is Live!"
 
-# Meta Webhook Verification
-@app.route("/webhook", methods=["GET"])
-def verify():
-    mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
-
-    if mode and token:
-        if mode == "subscribe" and token == VERIFY_TOKEN:
-            print("WEBHOOK_VERIFIED")
-            return challenge, 200
-        else:
-            return "Verification failed", 403
-    return "Hello World", 200
-
-# Incoming WhatsApp Messages Webhook
-@app.route("/webhook", methods=["POST"])
+# ================= WEBHOOK (GET for verification & POST for messages) =================
+@app.route("/webhook", methods=["GET", "POST"])
 def webhook():
-    data = request.json
-    print("Incoming Data:", data)
+    # 1. Meta (WhatsApp) जब वेबहुक वेरीफाई करेगा (GET Request)
+    if request.method == "GET":
+        mode = request.args.get("hub.mode")
+        token = request.args.get("hub.verify_token")
+        challenge = request.args.get("hub.challenge")
 
-    try:
-        if "entry" in data and \
-           data["entry"][0]["changes"] and \
-           "messages" in data["entry"][0]["changes"][0]["value"]:
-            
-            value = data["entry"][0]["changes"][0]["value"]
-            phone_number_id = value["metadata"]["phone_number_id"]
-            
-            message = value["messages"][0]
-            from_mobile = message["from"]
-            msg_body = message["text"]["body"]
-            
-            print(f"Message received from {from_mobile}: {msg_body}")
+        actual_verify_token = os.environ.get("VERIFY_TOKEN", "mosses191218")
 
-            # 1. Agar user rates ya price maange toh direct Google Sheet (Pricing tab) se laayein
-            if any(word in msg_body.lower() for word in ["rate", "price", "कीमत", "रेट", "rates"]):
-                try:
-                    sheet_res = requests.get(f"{GOOGLE_WEB_APP_URL}?type=pricing").text
-                    reply_text = sheet_res
-                except Exception as e:
-                    reply_text = "Sorry, unable to fetch rates right now."
-            
-            # 2. Baki sabhi messages ke liye FAQ data fetch karke Gemini ko dein
+        if mode and token:
+            if mode == "subscribe" and token == actual_verify_token:
+                print("WEBHOOK_VERIFIED")
+                return challenge, 200
             else:
-                try:
-                    faq_data = requests.get(f"{GOOGLE_WEB_APP_URL}?type=faq").text
-                except Exception as e:
-                    faq_data = "No FAQ data available."
+                return "Verification failed: Token mismatch", 403
+        return "Webhook endpoint is active", 200
 
-                prompt = f"""
-                Here is the official FAQ list and database from our store:
-                {faq_data}
+    # 2. जब यूजर WhatsApp पर मैसेज भेजेगा (POST Request)
+    elif request.method == "POST":
+        data = request.json
+        print("Incoming Data:", data)
 
-                User's message: "{msg_body}"
+        try:
+            if "entry" in data and \
+               data["entry"][0]["changes"] and \
+               "messages" in data["entry"][0]["changes"][0]["value"]:
                 
-                Instructions: Answer the user's question accurately based ONLY on the FAQ data or system instructions above. If it's a greeting, reply with the welcome menu.
-                """
-                ai_response = model.generate_content(prompt)
-                reply_text = ai_response.text
+                value = data["entry"][0]["changes"][0]["value"]
+                phone_number_id = value["metadata"]["phone_number_id"]
+                
+                message = value["messages"][0]
+                from_mobile = message["from"]
+                msg_body = message["text"]["body"]
+                
+                print(f"Message received from {from_mobile}: {msg_body}")
 
-            # WhatsApp par response bhejen
-            send_whatsapp_message(phone_number_id, from_mobile, reply_text)
+                reply_text = "Welcome to Moses Mike Laundry!"
 
-    except Exception as e:
-        print(f"Error: {e}")
+                # Pricing check
+                if any(word in msg_body.lower() for word in ["rate", "price", "कीमत", "रेट", "rates"]):
+                    try:
+                        sheet_res = requests.get(f"{GOOGLE_WEB_APP_URL}?type=pricing").text
+                        reply_text = sheet_res
+                    except Exception as e:
+                        print(f"Error fetching pricing: {e}")
+                        reply_text = "Sorry, unable to fetch rates right now."
+                
+                # FAQ & Gemini AI check
+                else:
+                    faq_data = "No FAQ data available."
+                    try:
+                        faq_data = requests.get(f"{GOOGLE_WEB_APP_URL}?type=faq").text
+                    except Exception as e:
+                        print(f"Error fetching FAQ: {e}")
 
-    return jsonify({"status": "success"}), 200
+                    prompt = f"""
+                    Here is the official FAQ list and database from our store:
+                    {faq_data}
+
+                    User's message: "{msg_body}"
+                    """
+                    ai_response = model.generate_content(prompt)
+                    reply_text = ai_response.text
+
+                # ग्राहक को WhatsApp पर जवाब भेजें
+                send_whatsapp_message(phone_number_id, from_mobile, reply_text)
+
+                # 💡 यदि AI के रिप्लाई में ऑर्डर कंफर्मेशन / ऑर्डर आईडी जनरेट हो गई है, तो ओनर को भी नोटिफिकेशन भेजें
+                if "order id" in reply_text.lower() or "confirmed" in reply_text.lower():
+                    owner_notification = f"🚨 New Order Alert!\n\nCustomer: {from_mobile}\nDetails/Reply: {reply_text}"
+                    send_whatsapp_message(phone_number_id, OWNER_PHONE, owner_notification)
+
+        except Exception as e:
+            print(f"Error processing message: {e}")
+
+        return jsonify({"status": "success"}), 200
 
 def send_whatsapp_message(phone_number_id, to_number, message):
+    current_token = os.environ.get("WHATSAPP_TOKEN", WHATSAPP_TOKEN)
     headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Authorization": f"Bearer {current_token}",
         "Content-Type": "application/json",
     }
     payload = {
