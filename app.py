@@ -43,8 +43,9 @@ How can I help you today?
 3. Match the user's language (Hindi/English/Hinglish). Keep replies short, polite, and strictly to the point.
 """
 
+# Model name ko update kar diya gaya hai taaki 404 error na aaye
 model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash',
+    model_name='gemini-1.5-pro',
     system_instruction=system_instruction,
     generation_config=generation_config
 )
